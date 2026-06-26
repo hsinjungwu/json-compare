@@ -1,117 +1,201 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 差異比對工具</title>
+    <title>JSON 差異比對工具 (本地離線版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone@7.23.12/babel.min.js"></script>
-    </head>
-<body class="bg-gray-50">
-    <div id="root"></div>
+    <style>
+        body {
+            font-family: ui-sans-serif, system-ui, sans-serif;
+            background-color: #f9fafb;
+            margin: 0;
+            padding: 20px;
+        }
 
-    <script type="text/babel">
-        const { useState, useMemo, useEffect } = React;
+        .font-mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+    </style>
+</head>
 
-        // 手動定義自訂圖示組件（完全自給自足，不依賴外部 Lucide CDN）
-        const ChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>;
-        const ChevronRight = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>;
-        const GitCompare = ({ size = 20 }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M13 6h3a2 2 0 0 1 2 2v7" /><path d="M11 18H8a2 2 0 0 1-2-2V9" /></svg>;
+<body class="bg-gray-50 text-gray-800">
 
-        const App = () => {
-            const [beforeInput, setBeforeInput] = useState('{\n  "name": "Gemini",\n  "version": 1,\n  "features": ["Chat", "Code"],\n  "status": "active"\n}');
-            const [afterInput, setAfterInput] = useState('{\n  "name": "Gemini 2.0",\n  "version": 2,\n  "features": ["Chat", "Code", "Reasoning"],\n  "status": "active",\n  "newField": "Hello World"\n}');
-            const [diffData, setDiffData] = useState(null);
+    <div class="min-h-screen p-4 md:p-8 max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-gray-800 flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                    class="inline">
+                    <circle cx="18" cy="18" r="3" />
+                    <circle cx="6" cy="6" r="3" />
+                    <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                    <path d="M11 18H8a2 2 0 0 1-2-2V9" />
+                </svg>
+                JSON 差異比對工具
+            </h1>
+        </header>
 
-            const compareJson = () => {
-                try {
-                    const before = JSON.parse(beforeInput);
-                    const after = JSON.parse(afterInput);
-                    setDiffData({ before, after });
-                } catch (e) {
-                    alert("JSON 格式錯誤，請檢查輸入內容。");
-                }
-            };
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="flex flex-col">
+                <span class="mb-2 text-sm font-semibold text-gray-600">舊 JSON (Before)</span>
+                <textarea id="beforeInput"
+                    class="h-64 p-4 border rounded-lg font-mono text-sm shadow-inner focus:ring-2 focus:ring-blue-400 focus:outline-none">{
+  "name": "Gemini",
+  "version": 1,
+  "features": ["Chat", "Code"],
+  "status": "active"
+}</textarea>
+            </div>
+            <div class="flex flex-col">
+                <span class="mb-2 text-sm font-semibold text-gray-600">新 JSON (After)</span>
+                <textarea id="afterInput"
+                    class="h-64 p-4 border rounded-lg font-mono text-sm shadow-inner focus:ring-2 focus:ring-blue-400 focus:outline-none">{
+  "name": "Gemini 2.0",
+  "version": 2,
+  "features": ["Chat", "Code", "Reasoning"],
+  "status": "active",
+  "newField": "Hello World"
+}</textarea>
+            </div>
+        </div>
 
-            const JsonNode = ({ data, otherData, side }) => {
-                const [isExpanded, setIsExpanded] = useState(true);
-                const isObject = (val) => val !== null && typeof val === 'object';
+        <div class="flex justify-center mb-10">
+            <button id="compareBtn"
+                class="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-full shadow-lg transition-colors duration-200">開始比對</button>
+        </div>
 
-                const renderValue = (val, otherVal) => {
-                    if (isObject(val)) {
-                        return <div className="ml-4"><JsonNode data={val} otherData={otherVal} side={side} /></div>;
-                    }
-                    const hasChanged = JSON.stringify(val) !== JSON.stringify(otherVal);
-                    let bgColor = hasChanged ? (side === 'left' ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700") : "";
-                    return <span className={`px-1 rounded ${bgColor}`}>{JSON.stringify(val)}</span>;
-                };
+        <div id="resultContainer"
+            class="grid grid-cols-1 md:grid-cols-2 border rounded-xl overflow-hidden bg-white shadow-xl hidden">
+            <div class="p-6 border-r overflow-auto max-h-[600px]">
+                <div class="font-bold text-red-600 border-b pb-2 mb-4">BEFORE (刪除 / 變更前)</div>
+                <div id="beforeDiff" class="font-mono text-sm"></div>
+            </div>
+            <div class="p-6 overflow-auto max-h-[600px]">
+                <div class="font-bold text-green-600 border-b pb-2 mb-4">AFTER (新增 / 變更後)</div>
+                <div id="afterDiff" class="font-mono text-sm"></div>
+            </div>
+        </div>
+    </div>
 
-                if (!isObject(data)) return JSON.stringify(data);
-                const keys = Array.isArray(data) ? [...Array(data.length).keys()] : Object.keys(data);
+    <script>
+        const chevronDownSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline select-none"><path d="m6 9 6 6 6-6" /></svg>`;
+        const chevronRightSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline select-none"><path d="m9 18 6-6-6-6" /></svg>`;
 
-                return (
-                    <div className="font-mono text-sm">
-                        <div className="flex items-center cursor-pointer hover:bg-gray-100 rounded px-1" onClick={() => setIsExpanded(!isExpanded)}>
-                            {isExpanded ? <ChevronDown /> : <ChevronRight />}
-                            <span className="text-blue-600 ml-1">{Array.isArray(data) ? "[" : "{"}</span>
-                            {!isExpanded && <span className="text-gray-400 italic ml-1">... {keys.length} items</span>}
-                            {!isExpanded && <span className="text-blue-600 ml-1">{Array.isArray(data) ? "]" : "}"}</span>}
-                        </div>
-                        {isExpanded && (
-                            <div className="border-l border-gray-200 ml-2 pl-4">
-                                {keys.map((key) => {
-                                    const val = data[key];
-                                    const otherVal = isObject(otherData) ? otherData[key] : undefined;
-                                    return (
-                                        <div key={key} className={`py-0.5 ${otherVal === undefined ? (side === 'left' ? "bg-red-50" : "bg-green-50") : ""}`}>
-                                            <span className="text-purple-600">"{key}"</span>: {renderValue(val, otherVal)}
-                                            {key !== keys[keys.length - 1] && ","}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                        {isExpanded && <div className="text-blue-600">{Array.isArray(data) ? "]" : "}"}</div>}
-                    </div>
-                );
-            };
+        function isObject(val) {
+            return val !== null && typeof val === 'object';
+        }
 
-            return (
-                <div className="min-h-screen p-4 md:p-8">
-                    <div className="max-w-7xl mx-auto">
-                        <header className="mb-8 text-center">
-                            <h1 className="text-3xl font-bold text-gray-800 flex items-center justify-center gap-2">
-                                <GitCompare size={32} /> JSON 差異比對工具
-                            </h1>
-                        </header>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                            <textarea className="h-64 p-4 border rounded-lg font-mono text-sm" value={beforeInput} onChange={(e) => setBeforeInput(e.target.value)} />
-                            <textarea className="h-64 p-4 border rounded-lg font-mono text-sm" value={afterInput} onChange={(e) => setAfterInput(e.target.value)} />
-                        </div>
-                        <div className="flex justify-center mb-10">
-                            <button onClick={compareJson} className="px-8 py-3 bg-blue-600 text-white font-bold rounded-full shadow-lg">開始比對</button>
-                        </div>
-                        {diffData && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 border rounded-xl overflow-hidden bg-white shadow-xl">
-                                <div className="p-6 border-r overflow-auto max-h-[600px]">
-                                    <div className="font-bold text-red-600 border-b mb-4">BEFORE (刪除)</div>
-                                    <JsonNode data={diffData.before} otherData={diffData.after} side="left" />
-                                </div>
-                                <div className="p-6 overflow-auto max-h-[600px]">
-                                    <div className="font-bold text-green-600 border-b mb-4">AFTER (新增)</div>
-                                    <JsonNode data={diffData.after} otherData={diffData.before} side="right" />
-                                </div>
-                            </div>
-                        )}
-                    </div>
+        // 遞迴渲染 JSON 節點
+        function renderJsonNode(data, otherData, side) {
+            if (!isObject(data)) {
+                return `<span>${escapeHtml(JSON.stringify(data))}</span>`;
+            }
+
+            const isArray = Array.isArray(data);
+            const keys = isArray ? [...Array(data.length).keys()] : Object.keys(data);
+            const startBracket = isArray ? "[" : "{";
+            const endBracket = isArray ? "]" : "}";
+
+            let html = `<div class="json-group">`;
+            // 標頭（可點擊收合）
+            html += `
+                <div class="flex items-center cursor-pointer hover:bg-gray-100 rounded px-1 select-none tree-toggle" onclick="toggleNode(this)">
+                    <span class="icon-container">${chevronDownSvg}</span>
+                    <span class="text-blue-600 ml-1">${startBracket}</span>
+                    <span class="text-gray-400 italic ml-1 hidden collapsed-info">... ${keys.length} items</span>
+                    <span class="text-blue-600 ml-1 hidden collapsed-bracket">${endBracket}</span>
                 </div>
-            );
-        };
+            `;
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+            // 子節點內容
+            html += `<div class="border-l border-gray-200 ml-2 pl-4 node-content">`;
+            keys.forEach((key, index) => {
+                const val = data[key];
+                const otherVal = isObject(otherData) ? otherData[key] : undefined;
+
+                // 檢查是否整行被刪除或新增
+                let rowBgColor = "";
+                if (otherVal === undefined) {
+                    rowBgColor = side === 'left' ? "bg-red-50" : "bg-green-50";
+                }
+
+                html += `<div class="py-0.5 ${rowBgColor}">`;
+                html += `<span class="text-purple-600">"${escapeHtml(key)}"</span>: `;
+
+                if (isObject(val)) {
+                    html += `<div class="ml-4">${renderJsonNode(val, otherVal, side)}</div>`;
+                } else {
+                    // 檢查數值是否改變
+                    const hasChanged = JSON.stringify(val) !== JSON.stringify(otherVal);
+                    let valBgColor = hasChanged ? (side === 'left' ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700") : "";
+                    html += `<span class="px-1 rounded ${valBgColor} break-all">${escapeHtml(JSON.stringify(val))}</span>`;
+                }
+
+                if (index !== keys.length - 1) html += ",";
+                html += `</div>`;
+            });
+            html += `</div>`; // 結束子節點內容
+
+            // 結尾括號
+            html += `<div class="text-blue-600 end-bracket">${endBracket}</div>`;
+            html += `</div>`;
+            return html;
+        }
+
+        // 收合/展開控制
+        function toggleNode(element) {
+            const group = element.closest('.json-group');
+            const content = group.querySelector('.node-content');
+            const endBracket = group.querySelector('.end-bracket');
+            const collapsedInfo = element.querySelector('.collapsed-info');
+            const collapsedBracket = element.querySelector('.collapsed-bracket');
+            const iconContainer = element.querySelector('.icon-container');
+
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                endBracket.classList.remove('hidden');
+                collapsedInfo.classList.add('hidden');
+                collapsedBracket.classList.add('hidden');
+                iconContainer.innerHTML = chevronDownSvg;
+            } else {
+                content.classList.add('hidden');
+                endBracket.classList.add('hidden');
+                collapsedInfo.classList.remove('hidden');
+                collapsedBracket.classList.remove('hidden');
+                iconContainer.innerHTML = chevronRightSvg;
+            }
+        }
+
+        // 修正：確保傳入的內容一定會被轉為字串，避免型態為數字或布林值時出錯
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function doCompare() {
+            const beforeInput = document.getElementById('beforeInput').value;
+            const afterInput = document.getElementById('afterInput').value;
+
+            try {
+                const before = JSON.parse(beforeInput);
+                const after = JSON.parse(afterInput);
+
+                document.getElementById('beforeDiff').innerHTML = renderJsonNode(before, after, 'left');
+                document.getElementById('afterDiff').innerHTML = renderJsonNode(after, before, 'right');
+
+                document.getElementById('resultContainer').classList.remove('hidden');
+            } catch (e) {
+                alert("JSON 格式錯誤，請檢查輸入內容。\n錯誤訊息: " + e.message);
+            }
+        }
+
+        // 綁定事件
+        document.getElementById('compareBtn').addEventListener('click', doCompare);
+
+        // 初始載入自動比對一次
+        window.addEventListener('DOMContentLoaded', doCompare);
     </script>
 </body>
+
 </html>
